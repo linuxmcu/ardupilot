@@ -214,8 +214,8 @@ struct PACKED log_POS {
 struct PACKED log_POWR {
     LOG_PACKET_HEADER;
     uint64_t time_us;
-    uint16_t Vcc;
-    uint16_t Vservo;
+    float Vcc;
+    float Vservo;
     uint16_t flags;
 };
 
@@ -421,12 +421,9 @@ struct PACKED log_PID {
 struct PACKED log_Current {
     LOG_PACKET_HEADER;
     uint64_t time_us;
-    int16_t  throttle;
-    int16_t  battery_voltage;
-    int16_t  current_amps;
-    uint16_t board_voltage;
+    float    battery_voltage;
+    float    current_amps;
     float    current_total;
-    int16_t  battery2_voltage;
 };
 
 struct PACKED log_Compass {
@@ -739,7 +736,7 @@ Format characters in the format string for binary log messages
     { LOG_BARO_MSG, sizeof(log_BARO), \
       "BARO",  "QffcfIf", "TimeUS,Alt,Press,Temp,CRt,SMS,Offset" }, \
     { LOG_POWR_MSG, sizeof(log_POWR), \
-      "POWR","QCCH","TimeUS,Vcc,VServo,Flags" },  \
+      "POWR","QffH","TimeUS,Vcc,VServo,Flags" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
       "CMD", "QHHHfffffff","TimeUS,CTot,CNum,CId,Prm1,Prm2,Prm3,Prm4,Lat,Lng,Alt" }, \
     { LOG_RADIO_MSG, sizeof(log_Radio), \
@@ -751,7 +748,9 @@ Format characters in the format string for binary log messages
     { LOG_ARSP_MSG, sizeof(log_AIRSPEED), \
       "ARSP",  "QffcffB",  "TimeUS,Airspeed,DiffPress,Temp,RawPress,Offset,U" }, \
     { LOG_CURRENT_MSG, sizeof(log_Current), \
-      "CURR", "QhhhHfh","TimeUS,Throttle,Volt,Curr,Vcc,CurrTot,Volt2" },\
+      "CURR", "Qfff","TimeUS,Volt,Curr,CurrTot" },\
+    { LOG_CURRENT2_MSG, sizeof(log_Current), \
+      "CUR2", "Qfff","TimeUS,Volt,Curr,CurrTot" }, \
 	{ LOG_ATTITUDE_MSG, sizeof(log_Attitude),\
       "ATT", "QccccCCCC", "TimeUS,DesRoll,Roll,DesPitch,Pitch,DesYaw,Yaw,ErrRP,ErrYaw" }, \
     { LOG_COMPASS_MSG, sizeof(log_Compass), \
@@ -864,7 +863,7 @@ Format characters in the format string for binary log messages
     { LOG_PIDS_MSG, sizeof(log_PID), \
       "PIDS", "Qffffff",  "TimeUS,Des,P,I,D,FF,AFF" }, \
     { LOG_BAR2_MSG, sizeof(log_BARO), \
-      "BAR2",  "QffcfI", "TimeUS,Alt,Press,Temp,CRt,SMS" }, \
+      "BAR2",  "QffcfIf", "TimeUS,Alt,Press,Temp,CRt,SMS,Offset" }, \
     { LOG_BAR3_MSG, sizeof(log_BARO), \
       "BAR3",  "QffcfI", "TimeUS,Alt,Press,Temp,CRt,SMS" }, \
     { LOG_VIBE_MSG, sizeof(log_Vibe), \
@@ -945,6 +944,7 @@ enum LogMessages {
     LOG_ARSP_MSG,
     LOG_ATTITUDE_MSG,
     LOG_CURRENT_MSG,
+    LOG_CURRENT2_MSG,
     LOG_COMPASS_MSG,
     LOG_COMPASS2_MSG,
     LOG_COMPASS3_MSG,

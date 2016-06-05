@@ -14,7 +14,7 @@ float Plane::get_speed_scaler(void)
         if (aspeed > auto_state.highest_airspeed) {
             auto_state.highest_airspeed = aspeed;
         }
-        if (aspeed > 0) {
+        if (aspeed > 0.0001f) {
             speed_scaler = g.scaling_speed / aspeed;
         } else {
             speed_scaler = 2.0;
@@ -200,8 +200,10 @@ void Plane::stabilize_stick_mixing_fbw()
     nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
     
     float pitch_input = channel_pitch->norm_input();
-    if (fabsf(pitch_input) > 0.5f) {
+    if (pitch_input > 0.5f) {
         pitch_input = (3*pitch_input - 1);
+    } else if (pitch_input < -0.5f) {
+        pitch_input = (3*pitch_input + 1);
     }
     if (fly_inverted()) {
         pitch_input = -pitch_input;
@@ -591,11 +593,13 @@ void Plane::flap_slew_limit(int8_t &last_value, int8_t &new_value)
 */
 bool Plane::suppress_throttle(void)
 {
+#if PARACHUTE == ENABLED
     if (auto_throttle_mode && parachute.release_initiated()) {
         // throttle always suppressed in auto-throttle modes after parachute release initiated
         throttle_suppressed = true;
         return true;
     }
+#endif
 
     if (!throttle_suppressed) {
         // we've previously met a condition for unsupressing the throttle
