@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 void Plane::read_control_switch()
@@ -68,7 +66,7 @@ void Plane::read_control_switch()
     }
 #endif
     
-#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
+#if HAVE_PX4_MIXER
     if (g.override_channel > 0) {
         // if the user has configured an override channel then check it
         bool override_requested = (hal.rcin->read(g.override_channel-1) >= PX4IO_OVERRIDE_PWM);
@@ -97,7 +95,7 @@ void Plane::read_control_switch()
             hal.rcout->force_safety_off();
         }
     }
-#endif // CONFIG_HAL_BOARD
+#endif // HAVE_PX4_MIXER
 }
 
 uint8_t Plane::readSwitch(void)

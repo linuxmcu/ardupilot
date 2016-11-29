@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <AP_HAL/AP_HAL.h>
 
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_150
@@ -60,8 +58,8 @@ void NavEKF2_core::readRangeFinder(void)
                     minIndex = 1;
                     maxIndex = 0;
                 } else {
-                    maxIndex = 0;
-                    minIndex = 1;
+                    minIndex = 0;
+                    maxIndex = 1;
                 }
                 if (storedRngMeas[sensorIndex][2] > storedRngMeas[sensorIndex][maxIndex]) {
                     midIndex = maxIndex;
@@ -79,8 +77,14 @@ void NavEKF2_core::readRangeFinder(void)
                 // limit the measured range to be no less than the on-ground range
                 rangeDataNew.rng = MAX(storedRngMeas[sensorIndex][midIndex],rngOnGnd);
 
+                // get position in body frame for the current sensor
+                rangeDataNew.sensor_idx = sensorIndex;
+
                 // write data to buffer with time stamp to be fused when the fusion time horizon catches up with it
                 storedRange.push(rangeDataNew);
+
+                // indicate we have updated the measurement
+                rngValidMeaTime_ms = imuSampleTime_ms;
 
             } else if (!takeOffDetected && ((imuSampleTime_ms - rngValidMeaTime_ms) > 200)) {
                 // before takeoff we assume on-ground range value if there is no data
@@ -96,17 +100,17 @@ void NavEKF2_core::readRangeFinder(void)
                 // write data to buffer with time stamp to be fused when the fusion time horizon catches up with it
                 storedRange.push(rangeDataNew);
 
+                // indicate we have updated the measurement
+                rngValidMeaTime_ms = imuSampleTime_ms;
+
             }
-
-            rngValidMeaTime_ms = imuSampleTime_ms;
-
         }
     }
 }
 
 // write the raw optical flow measurements
 // this needs to be called externally.
-void NavEKF2_core::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas)
+void NavEKF2_core::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset)
 {
     // The raw measurements need to be optical flow rates in radians/second averaged across the time since the last update
     // The PX4Flow sensor outputs flow rates with the following axis and sign conventions:
@@ -124,24 +128,36 @@ void NavEKF2_core::writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRa
         delAngBodyOF.zero();
         delTimeOF = 0.0f;
     }
-    // check for takeoff if relying on optical flow and zero measurements until takeoff detected
-    // if we haven't taken off - constrain position and velocity states
-    if (frontend->_fusionModeGPS == 3) {
-        detectOptFlowTakeoff();
-    }
+    // by definition if this function is called, then flow measurements have been provided so we
+    // need to run the optical flow takeoff detection
+    detectOptFlowTakeoff();
+
     // calculate rotation matrices at mid sample time for flow observations
     stateStruct.quat.rotation_matrix(Tbn_flow);
     // don't use data with a low quality indicator or extreme rates (helps catch corrupt sensor data)
     if ((rawFlowQuality > 0) && rawFlowRates.length() < 4.2f && rawGyroRates.length() < 4.2f) {
-        // correct flow sensor rates for bias
-        omegaAcrossFlowTime.x = rawGyroRates.x - flowGyroBias.x;
-        omegaAcrossFlowTime.y = rawGyroRates.y - flowGyroBias.y;
-        // write uncorrected flow rate measurements that will be used by the focal length scale factor estimator
+        // correct flow sensor body rates for bias and write
+        ofDataNew.bodyRadXYZ.x = rawGyroRates.x - flowGyroBias.x;
+        ofDataNew.bodyRadXYZ.y = rawGyroRates.y - flowGyroBias.y;
+        // the sensor interface doesn't provide a z axis rate so use the rate from the nav sensor instead
+        if (delTimeOF > 0.001f) {
+            // first preference is to use the rate averaged over the same sampling period as the flow sensor
+            ofDataNew.bodyRadXYZ.z = delAngBodyOF.z / delTimeOF;
+        } else if (imuDataNew.delAngDT > 0.001f){
+            // second preference is to use most recent IMU data
+            ofDataNew.bodyRadXYZ.z = imuDataNew.delAng.z / imuDataNew.delAngDT;
+        } else {
+            // third preference is use zero
+            ofDataNew.bodyRadXYZ.z =  0.0f;
+        }
+        // write uncorrected flow rate measurements
         // note correction for different axis and sign conventions used by the px4flow sensor
         ofDataNew.flowRadXY = - rawFlowRates; // raw (non motion compensated) optical flow angular rate about the X axis (rad/sec)
+        // write the flow sensor position in body frame
+        ofDataNew.body_offset = &posOffset;
         // write flow rate measurements corrected for body rates
-        ofDataNew.flowRadXYcomp.x = ofDataNew.flowRadXY.x + omegaAcrossFlowTime.x;
-        ofDataNew.flowRadXYcomp.y = ofDataNew.flowRadXY.y + omegaAcrossFlowTime.y;
+        ofDataNew.flowRadXYcomp.x = ofDataNew.flowRadXY.x + ofDataNew.bodyRadXYZ.x;
+        ofDataNew.flowRadXYcomp.y = ofDataNew.flowRadXY.y + ofDataNew.bodyRadXYZ.y;
         // record time last observation was received so we can detect loss of data elsewhere
         flowValidMeaTime_ms = imuSampleTime_ms;
         // estimate sample time of the measurement
@@ -197,7 +213,7 @@ void NavEKF2_core::readMagData()
                 // if the magnetometer is allowed to be used for yaw and has a different index, we start using it
                 if (_ahrs->get_compass()->use_for_yaw(tempIndex) && tempIndex != magSelectIndex) {
                     magSelectIndex = tempIndex;
-                    GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_WARNING, "EKF2 IMU%u switching to compass %u",(unsigned)imu_index,magSelectIndex);
+                    GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_INFO, "EKF2 IMU%u switching to compass %u",(unsigned)imu_index,magSelectIndex);
                     // reset the timeout flag and timer
                     magTimeout = false;
                     lastHealthyMagTime_ms = imuSampleTime_ms;
@@ -271,8 +287,10 @@ void NavEKF2_core::readIMUData()
     // use the nominated imu or primary if not available
     if (ins.use_accel(imu_index)) {
         readDeltaVelocity(imu_index, imuDataNew.delVel, imuDataNew.delVelDT);
+        accelPosOffset = ins.get_imu_pos_offset(imu_index);
     } else {
         readDeltaVelocity(ins.get_primary_accel(), imuDataNew.delVel, imuDataNew.delVelDT);
+        accelPosOffset = ins.get_imu_pos_offset(ins.get_primary_accel());
     }
 
     // Get delta angle data from primary gyro or primary if not available
@@ -399,6 +417,9 @@ void NavEKF2_core::readGpsData()
 
             // Prevent time delay exceeding age of oldest IMU data in the buffer
             gpsDataNew.time_ms = MAX(gpsDataNew.time_ms,imuDataDelayed.time_ms);
+
+            // Get which GPS we are using for position information
+            gpsDataNew.sensor_idx = _ahrs->get_gps().primary_sensor();
 
             // read the NED velocity from the GPS
             gpsDataNew.vel = _ahrs->get_gps().velocity();

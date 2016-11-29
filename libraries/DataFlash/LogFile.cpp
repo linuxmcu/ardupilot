@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <stdlib.h>
 
 #include <AP_AHRS/AP_AHRS.h>
@@ -37,14 +35,14 @@ void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_ty
         _params.backend_types == DATAFLASH_BACKEND_BOTH) {
         DFMessageWriter_DFLogStart *message_writer =
             new DFMessageWriter_DFLogStart(_firmware_string);
-        if (message_writer != NULL)  {
+        if (message_writer != nullptr)  {
 #if HAL_OS_POSIX_IO
             backends[_next_backend] = new DataFlash_File(*this,
                                                          message_writer,
                                                          HAL_BOARD_LOG_DIRECTORY);
 #endif
         }
-        if (backends[_next_backend] == NULL) {
+        if (backends[_next_backend] == nullptr) {
             hal.console->printf("Unable to open DataFlash_File");
         } else {
             _next_backend++;
@@ -61,11 +59,11 @@ void DataFlash_Class::Init(const struct LogStructure *structures, uint8_t num_ty
         }
         DFMessageWriter_DFLogStart *message_writer =
             new DFMessageWriter_DFLogStart(_firmware_string);
-        if (message_writer != NULL)  {
+        if (message_writer != nullptr)  {
             backends[_next_backend] = new DataFlash_MAVLink(*this,
                                                             message_writer);
         }
-        if (backends[_next_backend] == NULL) {
+        if (backends[_next_backend] == nullptr) {
             hal.console->printf("Unable to open DataFlash_MAVLink");
         } else {
             _next_backend++;
@@ -121,9 +119,9 @@ uint16_t DataFlash_Block::start_new_log(void)
     uint16_t last_page = find_last_page();
 
     StartRead(last_page);
-    //Serial.print("last page: ");	Serial.println(last_page);
-    //Serial.print("file #: ");	Serial.println(GetFileNumber());
-    //Serial.print("file page: ");	Serial.println(GetFilePage());
+    //Serial.print("last page: "); Serial.println(last_page);
+    //Serial.print("file #: ");    Serial.println(GetFileNumber());
+    //Serial.print("file page: "); Serial.println(GetFilePage());
 
     if(find_last_log() == 0 || GetFileNumber() == 0xFFFF) {
         SetFileNumber(1);
@@ -328,7 +326,7 @@ uint16_t DataFlash_Block::find_last_page_of_log(uint16_t log_number)
     StartRead(bottom);
     if (GetFileNumber() == log_number) return bottom;
 
-    return -1;
+    return 0xFFFF;
 }
 
 /*
@@ -847,13 +845,13 @@ void DataFlash_Class::Log_Write_Baro(AP_Baro &baro, uint64_t time_us)
             LOG_PACKET_HEADER_INIT(LOG_BAR2_MSG),
             time_us       : time_us,
             altitude      : baro.get_altitude(1),
-            pressure	  : baro.get_pressure(1),
+            pressure      : baro.get_pressure(1),
             temperature   : (int16_t)(baro.get_temperature(1) * 100 + 0.5f),
             climbrate     : climbrate,
             sample_time_ms: baro.get_last_update(1),
             drift_offset  : drift_offset,
         };
-        WriteBlock(&pkt2, sizeof(pkt2));        
+        WriteBlock(&pkt2, sizeof(pkt2));
     }
 
     if (baro.num_instances() > 2 && baro.healthy(2)) {
@@ -861,13 +859,13 @@ void DataFlash_Class::Log_Write_Baro(AP_Baro &baro, uint64_t time_us)
             LOG_PACKET_HEADER_INIT(LOG_BAR3_MSG),
             time_us       : time_us,
             altitude      : baro.get_altitude(2),
-            pressure	  : baro.get_pressure(2),
+            pressure      : baro.get_pressure(2),
             temperature   : (int16_t)(baro.get_temperature(2) * 100 + 0.5f),
             climbrate     : climbrate,
             sample_time_ms: baro.get_last_update(2),
             drift_offset  : drift_offset,
         };
-        WriteBlock(&pkt3, sizeof(pkt3));        
+        WriteBlock(&pkt3, sizeof(pkt3));
     }
 }
 
@@ -1286,7 +1284,7 @@ void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
 void DataFlash_Class::Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
 {
     uint64_t time_us = AP_HAL::micros64();
-	// Write first EKF packet
+    // Write first EKF packet
     Vector3f euler;
     Vector2f posNE;
     float posD;
@@ -1394,7 +1392,7 @@ void DataFlash_Class::Log_Write_EKF2(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
     ahrs.get_NavEKF2().getFilterGpsStatus(0,gpsStatus);
     float tiltError;
     ahrs.get_NavEKF2().getTiltError(0,tiltError);
-    uint8_t primaryIndex = ahrs.get_NavEKF2().getPrimaryCoreIndex();
+    int8_t primaryIndex = ahrs.get_NavEKF2().getPrimaryCoreIndex();
     struct log_NKF4 pkt4 = {
         LOG_PACKET_HEADER_INIT(LOG_NKF4_MSG),
         time_us : time_us,
@@ -1567,7 +1565,7 @@ bool DataFlash_Backend::Log_Write_MavCmd(uint16_t cmd_total, const mavlink_missi
     return WriteBlock(&pkt, sizeof(pkt));
 }
 
-void DataFlash_Class::Log_Write_Radio(const mavlink_radio_t &packet) 
+void DataFlash_Class::Log_Write_Radio(const mavlink_radio_t &packet)
 {
     struct log_Radio pkt = {
         LOG_PACKET_HEADER_INIT(LOG_RADIO_MSG),
@@ -1580,7 +1578,7 @@ void DataFlash_Class::Log_Write_Radio(const mavlink_radio_t &packet)
         rxerrors     : packet.rxerrors,
         fixed        : packet.fixed
     };
-    WriteBlock(&pkt, sizeof(pkt)); 
+    WriteBlock(&pkt, sizeof(pkt));
 }
 
 // Write a Camera packet
@@ -1681,7 +1679,7 @@ void DataFlash_Class::Log_Write_Compass(const Compass &compass, uint64_t time_us
     }
     const Vector3f &mag_field = compass.get_field(0);
     const Vector3f &mag_offsets = compass.get_offsets(0);
-    const Vector3f &mag_motor_offsets = compass.get_motor_offsets(0);   
+    const Vector3f &mag_motor_offsets = compass.get_motor_offsets(0);
     struct log_Compass pkt = {
         LOG_PACKET_HEADER_INIT(LOG_COMPASS_MSG),
         time_us         : time_us,
@@ -1702,7 +1700,7 @@ void DataFlash_Class::Log_Write_Compass(const Compass &compass, uint64_t time_us
     if (compass.get_count() > 1) {
         const Vector3f &mag_field2 = compass.get_field(1);
         const Vector3f &mag_offsets2 = compass.get_offsets(1);
-        const Vector3f &mag_motor_offsets2 = compass.get_motor_offsets(1);   
+        const Vector3f &mag_motor_offsets2 = compass.get_motor_offsets(1);
         struct log_Compass pkt2 = {
             LOG_PACKET_HEADER_INIT(LOG_COMPASS2_MSG),
             time_us         : time_us,
@@ -1724,7 +1722,7 @@ void DataFlash_Class::Log_Write_Compass(const Compass &compass, uint64_t time_us
     if (compass.get_count() > 2) {
         const Vector3f &mag_field3 = compass.get_field(2);
         const Vector3f &mag_offsets3 = compass.get_offsets(2);
-        const Vector3f &mag_motor_offsets3 = compass.get_motor_offsets(2);   
+        const Vector3f &mag_motor_offsets3 = compass.get_motor_offsets(2);
         struct log_Compass pkt3 = {
             LOG_PACKET_HEADER_INIT(LOG_COMPASS3_MSG),
             time_us         : time_us,
@@ -1766,8 +1764,8 @@ void DataFlash_Class::Log_Write_ESC(void)
 
     if (_esc_status_sub == -1) {
         // subscribe to ORB topic on first call
-        _esc_status_sub = orb_subscribe(ORB_ID(esc_status));  
-    } 
+        _esc_status_sub = orb_subscribe(ORB_ID(esc_status));
+    }
 
     // check for new ESC status data
     bool esc_updated = false;

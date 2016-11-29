@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Copter.h"
 
 #define ARM_DELAY               20  // called at 10hz so 2 seconds
@@ -139,6 +137,9 @@ bool Copter::init_arm_motors(bool arming_from_gcs)
         return false;
     }
 
+    // let dataflash know that we're armed (it may open logs e.g.)
+    DataFlash_Class::instance()->set_vehicle_armed(true);
+
     // disable cpu failsafe because initialising everything takes a while
     failsafe_disable();
 
@@ -256,6 +257,7 @@ void Copter::init_disarm_motors()
     if (!DataFlash.log_while_disarmed()) {
         DataFlash.EnableWrites(false);
     }
+    DataFlash_Class::instance()->set_vehicle_armed(false);
 
     // disable gps velocity based centrefugal force compensation
     ahrs.set_correct_centrifugal(false);

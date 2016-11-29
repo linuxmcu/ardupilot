@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 /* ************************************************************ */
 /* Test for DataFlash Log library                               */
 /* ************************************************************ */
@@ -194,6 +192,7 @@ public:
     struct {
         AP_Int8 backend_types;
         AP_Int8 file_bufsize; // in kilobytes
+        AP_Int8 file_disarm_rot;
         AP_Int8 log_disarmed;
         AP_Int8 log_replay;
     } _params;
@@ -206,6 +205,8 @@ public:
     bool logging_present() const;
     bool logging_enabled() const;
     bool logging_failed() const;
+
+    void set_vehicle_armed(bool armed_state);
 
 protected:
 
@@ -259,6 +260,8 @@ private:
     // calculate the length of a message using fields specified in
     // fmt; includes the message header
     int16_t Log_Write_calc_msg_len(const char *fmt) const;
+
+    bool _armed;
 
 private:
     static DataFlash_Class *_instance;

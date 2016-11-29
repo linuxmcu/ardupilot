@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include <AP_HAL/AP_HAL.h>
 
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_150
@@ -140,6 +138,7 @@ void NavEKF2_core::InitialiseVariables()
     lastPreAlignGpsCheckTime_ms = imuSampleTime_ms;
     lastPosReset_ms = 0;
     lastVelReset_ms = 0;
+    lastPosResetD_ms = 0;
     lastRngMeasTime_ms = 0;
     terrainHgtStableSet_ms = 0;
 
@@ -241,6 +240,7 @@ void NavEKF2_core::InitialiseVariables()
     sideSlipFusionDelayed = false;
     posResetNE.zero();
     velResetNE.zero();
+    posResetD = 0.0f;
     hgtInnovFiltState = 0.0f;
     if (_ahrs->get_compass()) {
         magSelectIndex = _ahrs->get_compass()->get_primary();
@@ -269,6 +269,8 @@ void NavEKF2_core::InitialiseVariables()
     memset(&storedRngMeas, 0, sizeof(storedRngMeas));
     terrainHgtStable = true;
     ekfOriginHgtVar = 0.0f;
+    velOffsetNED.zero();
+    posOffsetNED.zero();
 
     // zero data buffers
     storedIMU.reset();
@@ -605,6 +607,27 @@ void NavEKF2_core::calcOutputStates()
 
     // apply a trapezoidal integration to velocities to calculate position
     outputDataNew.position += (outputDataNew.velocity + lastVelocity) * (imuDataNew.delVelDT*0.5f);
+
+    // If the IMU accelerometer is offset from the body frame origin, then calculate corrections
+    // that can be added to the EKF velocity and position outputs so that they represent the velocity
+    // and position of the body frame origin.
+    // Note the * operator has been overloaded to operate as a dot product
+    if (!accelPosOffset.is_zero()) {
+        // calculate the average angular rate across the last IMU update
+        // note delAngDT is prevented from being zero in readIMUData()
+        Vector3f angRate = imuDataNew.delAng * (1.0f/imuDataNew.delAngDT);
+
+        // Calculate the velocity of the body frame origin relative to the IMU in body frame
+        // and rotate into earth frame. Note % operator has been overloaded to perform a cross product
+        Vector3f velBodyRelIMU = angRate % (- accelPosOffset);
+        velOffsetNED = Tbn_temp * velBodyRelIMU;
+
+        // calculate the earth frame position of the body frame origin relative to the IMU
+        posOffsetNED = Tbn_temp * (- accelPosOffset);
+    } else {
+        velOffsetNED.zero();
+        posOffsetNED.zero();
+    }
 
     // store INS states in a ring buffer that with the same length and time coordinates as the IMU data buffer
     if (runUpdates) {
@@ -1336,10 +1359,8 @@ void NavEKF2_core::ConstrainStates()
     for (uint8_t i=19; i<=21; i++) statesArray[i] = constrain_float(statesArray[i],-0.5f,0.5f);
     // wind velocity limit 100 m/s (could be based on some multiple of max airspeed * EAS2TAS) - TODO apply circular limit
     for (uint8_t i=22; i<=23; i++) statesArray[i] = constrain_float(statesArray[i],-100.0f,100.0f);
-    // constrain the terrain or vertical position state state depending on whether we are using the ground as the height reference
-    if (inhibitGndState) {
-        stateStruct.position.z = MIN(stateStruct.position.z, terrainState - rngOnGnd);
-    } else {
+    // constrain the terrain state to be below the vehicle height unless we are using terrain as the height datum
+    if (!inhibitGndState) {
         terrainState = MAX(terrainState, stateStruct.position.z + rngOnGnd);
     }
 }

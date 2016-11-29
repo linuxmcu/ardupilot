@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 #pragma once
 
 // Internal defines, don't edit and expect things to work
@@ -41,6 +40,12 @@ enum mode {
     INITIALISING=16
 };
 
+enum GuidedMode {
+    Guided_WP,
+    Guided_Angle
+};
+
+
 // types of failsafe events
 #define FAILSAFE_EVENT_THROTTLE (1<<0)
 #define FAILSAFE_EVENT_GCS      (1<<1)
@@ -54,6 +59,7 @@ enum mode {
 #define LOG_SONAR_MSG 		    0x07
 #define LOG_ARM_DISARM_MSG      0x08
 #define LOG_STEERING_MSG        0x0D
+#define LOG_GUIDEDTARGET_MSG    0x0E
 
 #define TYPE_AIRSTART_MSG		0x00
 #define TYPE_GROUNDSTART_MSG	0x01

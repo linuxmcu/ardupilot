@@ -1,4 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
   additional arming checks for plane
  */
@@ -82,6 +81,16 @@ bool AP_Arming_Plane::pre_arm_checks(bool report)
         }
         ret = false;
     }
+
+#if HAVE_PX4_MIXER
+    if (plane.last_mixer_crc == -1) {
+        if (report) {
+            // if you ever get this error, a reboot is recommended.
+            GCS_MAVLINK::send_statustext_all(MAV_SEVERITY_CRITICAL,"PreArm: Mixer error");
+        }
+        ret = false;
+    }
+#endif // CONFIG_HAL_BOARD
 
     return ret;
 }

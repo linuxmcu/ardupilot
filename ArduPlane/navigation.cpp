@@ -1,5 +1,3 @@
-// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Plane.h"
 
 // set the nav_controller pointer to the right controller
@@ -63,7 +61,7 @@ void Plane::navigate()
         return;
     }
 
-    if (next_WP_loc.lat == 0) {
+    if (next_WP_loc.lat == 0 && next_WP_loc.lng == 0) {
         return;
     }
 
@@ -87,7 +85,7 @@ void Plane::calc_airspeed_errors()
     float airspeed_measured_cm = airspeed.get_airspeed_cm();
 
     // Normal airspeed target
-    target_airspeed_cm = g.airspeed_cruise_cm;
+    target_airspeed_cm = aparm.airspeed_cruise_cm;
 
     // FBW_B airspeed target
     if (control_mode == FLY_BY_WIRE_B || 
@@ -110,9 +108,9 @@ void Plane::calc_airspeed_errors()
 
         case AP_SpdHgtControl::FLIGHT_LAND_PREFLARE:
         case AP_SpdHgtControl::FLIGHT_LAND_FINAL:
-            if (auto_state.land_pre_flare && aparm.land_pre_flare_airspeed > 0) {
+            if (landing.pre_flare && landing.get_pre_flare_airspeed() > 0) {
                 // if we just preflared then continue using the pre-flare airspeed during final flare
-                target_airspeed_cm = aparm.land_pre_flare_airspeed * 100;
+                target_airspeed_cm = landing.get_pre_flare_airspeed() * 100;
             } else if (land_airspeed >= 0) {
                 target_airspeed_cm = land_airspeed * 100;
             }
@@ -126,7 +124,7 @@ void Plane::calc_airspeed_errors()
     // Set target to current airspeed + ground speed undershoot,
     // but only when this is faster than the target airspeed commanded
     // above.
-    if (control_mode >= FLY_BY_WIRE_B && (g.min_gndspeed_cm > 0)) {
+    if (control_mode >= FLY_BY_WIRE_B && (aparm.min_gndspeed_cm > 0)) {
         int32_t min_gnd_target_airspeed = airspeed_measured_cm + groundspeed_undershoot;
         if (min_gnd_target_airspeed > target_airspeed_cm)
             target_airspeed_cm = min_gnd_target_airspeed;
@@ -156,7 +154,7 @@ void Plane::calc_gndspeed_undershoot()
 		Vector2f yawVect = Vector2f(rotMat.a.x,rotMat.b.x);
 		yawVect.normalize();
 		float gndSpdFwd = yawVect * gndVel;
-        groundspeed_undershoot = (g.min_gndspeed_cm > 0) ? (g.min_gndspeed_cm - gndSpdFwd*100) : 0;
+        groundspeed_undershoot = (aparm.min_gndspeed_cm > 0) ? (aparm.min_gndspeed_cm - gndSpdFwd*100) : 0;
     }
 }
 
@@ -173,8 +171,7 @@ void Plane::update_loiter(uint16_t radius)
     }
 
     if (loiter.start_time_ms != 0 &&
-        quadplane.available() &&
-        quadplane.guided_mode != 0) {
+        quadplane.guided_mode_enabled()) {
         if (!auto_state.vtol_loiter) {
             auto_state.vtol_loiter = true;
             // reset loiter start time, so we don't consider the point
@@ -202,8 +199,7 @@ void Plane::update_loiter(uint16_t radius)
                 // starting a loiter in GUIDED means we just reached the target point
                 gcs_send_mission_item_reached_message(0);
             }
-            if (quadplane.available() &&
-                quadplane.guided_mode != 0) {
+            if (quadplane.guided_mode_enabled()) {
                 quadplane.guided_start();
             }
         }

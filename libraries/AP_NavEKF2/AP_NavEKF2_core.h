@@ -1,4 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 /*
   24 state EKF based on https://github.com/priseborough/InertialNav
 
@@ -67,9 +66,9 @@ public:
     // Check basic filter health metrics and return a consolidated health status
     bool healthy(void) const;
 
-    // Return a consolidated fault score where higher numbers are less healthy
+    // Return a consolidated error score where higher numbers are less healthy
     // Intended to be used by the front-end to determine which is the primary EKF
-    float faultScore(void) const;
+    float errorScore(void) const;
 
     // Write the last calculated NE position relative to the reference point (m).
     // If a calculated solution is not available, use the best available data and return false
@@ -188,7 +187,8 @@ public:
     // rawGyroRates are the sensor rotation rates in rad/sec measured by the sensors internal gyro
     // The sign convention is that a RH physical rotation of the sensor about an axis produces both a positive flow and gyro rate
     // msecFlowMeas is the scheduler time in msec when the optical flow data was received from the sensor.
-    void  writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas);
+    // posOffset is the XYZ flow sensor position in the body frame in m
+    void  writeOptFlowMeas(uint8_t &rawFlowQuality, Vector2f &rawFlowRates, Vector2f &rawGyroRates, uint32_t &msecFlowMeas, const Vector3f &posOffset);
 
     // return data for debugging optical flow fusion
     void getFlowDebug(float &varFlow, float &gndOffset, float &flowInnovX, float &flowInnovY, float &auxInnov, float &HAGL, float &rngInnov, float &range, float &gndOffsetErr) const;
@@ -261,6 +261,10 @@ public:
     // return the amount of NE position change due to the last position reset in metres
     // returns the time of the last reset or 0 if no reset has ever occurred
     uint32_t getLastPosNorthEastReset(Vector2f &pos) const;
+
+    // return the amount of D position change due to the last position reset in metres
+    // returns the time of the last reset or 0 if no reset has ever occurred
+    uint32_t getLastPosDownReset(float &posD) const;
 
     // return the amount of NE velocity change due to the last velocity reset in metres/sec
     // returns the time of the last reset or 0 if no reset has ever occurred
@@ -374,6 +378,7 @@ private:
         float       hgt;         // 2
         Vector3f    vel;         // 3..5
         uint32_t    time_ms;     // 6
+        uint8_t     sensor_idx;  // 7..9
     };
 
     struct mag_elements {
@@ -389,6 +394,7 @@ private:
     struct range_elements {
         float       rng;         // 0
         uint32_t    time_ms;     // 1
+        uint8_t     sensor_idx;  // 2
     };
 
     struct tas_elements {
@@ -400,6 +406,8 @@ private:
         Vector2f    flowRadXY;      // 0..1
         Vector2f    flowRadXYcomp;  // 2..3
         uint32_t    time_ms;        // 4
+        Vector3f    bodyRadXYZ;     //8..10
+        const Vector3f *body_offset;// 5..7
     };
 
     // update the navigation filter status
@@ -809,6 +817,8 @@ private:
     uint32_t lastPosReset_ms;       // System time at which the last position reset occurred. Returned by getLastPosNorthEastReset
     Vector2f velResetNE;            // Change in North/East velocity due to last in-flight reset in metres/sec. Returned by getLastVelNorthEastReset
     uint32_t lastVelReset_ms;       // System time at which the last velocity reset occurred. Returned by getLastVelNorthEastReset
+    float posResetD;                // Change in Down position due to last in-flight reset in metres. Returned by getLastPosDowntReset
+    uint32_t lastPosResetD_ms;      // System time at which the last position reset occurred. Returned by getLastPosDownReset
     float yawTestRatio;             // square of magnetometer yaw angle innovation divided by fail threshold
     Quaternion prevQuatMagReset;    // Quaternion from the last time the magnetic field state reset condition test was performed
     uint8_t fusionHorizonOffset;    // number of IMU samples that the fusion time horizon  has been shifted to prevent multiple EKF instances fusing data at the same time
@@ -828,8 +838,9 @@ private:
     nav_filter_status filterStatus; // contains the status of various filter outputs
     float ekfOriginHgtVar;          // Variance of the the EKF WGS-84 origin height estimate (m^2)
     uint32_t lastOriginHgtTime_ms;  // last time the ekf's WGS-84 origin height was corrected
-
-    Vector3f outputTrackError;
+    Vector3f outputTrackError;      // attitude (rad), velocity (m/s) and position (m) tracking error magnitudes from the output observer
+    Vector3f velOffsetNED;          // This adds to the earth frame velocity estimate at the IMU to give the velocity at the body origin (m/s)
+    Vector3f posOffsetNED;          // This adds to the earth frame position estimate at the IMU to give the position at the body origin (m)
 
     // variables used to calculate a vertical velocity that is kinematically consistent with the verical position
     float posDownDerivative;        // Rate of chage of vertical position (dPosD/dt) in m/s. This is the first time derivative of PosD.
@@ -872,7 +883,6 @@ private:
     uint32_t rngValidMeaTime_ms;    // time stamp from latest valid range measurement (msec)
     uint32_t flowMeaTime_ms;        // time stamp from latest flow measurement (msec)
     uint32_t gndHgtValidTime_ms;    // time stamp from last terrain offset state update (msec)
-    Vector3f omegaAcrossFlowTime;   // body angular rates averaged across the optical flow sample period
     Matrix3f Tbn_flow;              // transformation matrix from body to nav axes at the middle of the optical flow sample period
     Vector2 varInnovOptFlow;        // optical flow innovations variances (rad/sec)^2
     Vector2 innovOptFlow;           // optical flow LOS innovations (rad/sec)
@@ -905,6 +915,8 @@ private:
     bool gndOffsetValid;            // true when the ground offset state can still be considered valid
     Vector3f delAngBodyOF;          // bias corrected delta angle of the vehicle IMU measured summed across the time since the last OF measurement
     float delTimeOF;                // time that delAngBodyOF is summed across
+    Vector3f accelPosOffset;        // position of IMU accelerometer unit in body frame (m)
+
 
     // Range finder
     float baroHgtOffset;                    // offset applied when when switching to use of Baro height

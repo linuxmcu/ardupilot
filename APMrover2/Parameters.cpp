@@ -1,5 +1,3 @@
-/// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
-
 #include "Rover.h"
 
 /*
@@ -555,9 +553,34 @@ const AP_Param::Info Rover::var_info[] = {
     // @Group: BTN_
     // @Path: ../libraries/AP_Button/AP_Button.cpp
     GOBJECT(button, "BTN_",  AP_Button),
-    
+
+    // @Group:
+    // @Path: Parameters.cpp
+    GOBJECT(g2, "",  ParametersG2),
+
 	AP_VAREND
 };
+
+/*
+  2nd group of parameters
+ */
+const AP_Param::GroupInfo ParametersG2::var_info[] = {
+
+    // @Group: STAT
+    // @Path: ../libraries/AP_Stats/AP_Stats.cpp
+    AP_SUBGROUPINFO(stats, "STAT", 1, ParametersG2, AP_Stats),
+
+    // @Group: SYSID_ENFORCE
+    // @DisplayName: GCS sysid enforcement
+    // @Description: This controls whether packets from other than the expected GCS system ID will be accepted
+    // @Values: 0:NotEnforced,1:Enforced
+    // @User: Advanced
+    AP_GROUPINFO("SYSID_ENFORCE", 2, ParametersG2, sysid_enforce, 0),
+
+    AP_GROUPEND
+};
+
+
 
 /*
   This is a conversion table from old parameter values to new
@@ -587,7 +610,7 @@ const AP_Param::ConversionInfo conversion_table[] = {
 void Rover::load_parameters(void)
 {
     if (!AP_Param::check_var_info()) {
-        cliSerial->printf("Bad var table\n");
+        cliSerial->println("Bad var table");
         AP_HAL::panic("Bad var table");
     }
 
@@ -595,7 +618,7 @@ void Rover::load_parameters(void)
 	     g.format_version != Parameters::k_format_version) {
 
 		// erase all parameters
-		cliSerial->printf("Firmware change: erasing EEPROM...\n");
+		cliSerial->println("Firmware change: erasing EEPROM...");
 		AP_Param::erase_all();
 
 		// save the current format version
