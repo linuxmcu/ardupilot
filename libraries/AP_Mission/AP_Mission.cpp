@@ -125,10 +125,13 @@ bool AP_Mission::starts_with_takeoff_cmd()
     if (cmd_index == AP_MISSION_CMD_INDEX_NONE) {
         // start from beginning of the mission command list
         cmd_index = AP_MISSION_FIRST_REAL_COMMAND;
-        get_next_cmd(cmd_index, cmd, true);
-
+        if (!get_next_cmd(cmd_index, cmd, true)) {
+            return false;
+        }
     } else {
-        read_cmd_from_storage(cmd_index, cmd);
+        if (!read_cmd_from_storage(cmd_index, cmd)) {
+            return false;
+        }
     }
 
     if (cmd.id != MAV_CMD_NAV_TAKEOFF) {
@@ -572,7 +575,6 @@ MAV_MISSION_RESULT AP_Mission::mavlink_int_to_mission_cmd(const mavlink_mission_
         break;
 
     case MAV_CMD_NAV_RETURN_TO_LAUNCH:                  // MAV ID: 20
-        copy_location = true;
         break;
 
     case MAV_CMD_NAV_LAND:                              // MAV ID: 21
@@ -767,7 +769,12 @@ MAV_MISSION_RESULT AP_Mission::mavlink_int_to_mission_cmd(const mavlink_mission_
         cmd.content.do_engine_control.cold_start = (packet.param2>0);
         cmd.content.do_engine_control.height_delay_cm = packet.param3*100;
         break;        
-        
+
+    case MAV_CMD_NAV_PAYLOAD_PLACE:
+        cmd.p1 = packet.param1*100; // copy max-descend parameter (m->cm)
+        copy_location = true;
+        break;
+
     default:
         // unrecognised command
         return MAV_MISSION_UNSUPPORTED;
@@ -986,10 +993,9 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
 
     case MAV_CMD_NAV_LOITER_UNLIM:                      // MAV ID: 17
         copy_location = true;
+        packet.param3 = (float)cmd.p1;
         if (cmd.content.location.flags.loiter_ccw) {
-            packet.param3 = -1;
-        }else{
-            packet.param3 = 1;
+            packet.param3 *= -1;
         }
         break;
 
@@ -1015,7 +1021,6 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
         break;
 
     case MAV_CMD_NAV_RETURN_TO_LAUNCH:                  // MAV ID: 20
-        copy_location = true;
         break;
 
     case MAV_CMD_NAV_LAND:                              // MAV ID: 21
@@ -1212,7 +1217,12 @@ bool AP_Mission::mission_cmd_to_mavlink_int(const AP_Mission::Mission_Command& c
         packet.param2 = cmd.content.do_engine_control.cold_start?1:0;
         packet.param3 = cmd.content.do_engine_control.height_delay_cm*0.01f;
         break;        
-                
+
+    case MAV_CMD_NAV_PAYLOAD_PLACE:
+        copy_location = true;
+        packet.param1 = cmd.p1/100.0f; // copy max-descend parameter (m->cm)
+        break;
+
     default:
         // unrecognised command
         return false;
