@@ -12,12 +12,17 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "AP_BoardLED.h"
 
+#include "AP_Notify_config.h"
+
+#if AP_NOTIFY_GPIO_LED_3_ENABLED
+
+#include "AP_BoardLED.h"
 #include "AP_Notify.h"
 
-#if (defined(HAL_GPIO_A_LED_PIN) && defined(HAL_GPIO_B_LED_PIN) && \
-     defined(HAL_GPIO_C_LED_PIN))
+static_assert((HAL_GPIO_A_LED_PIN != HAL_GPIO_B_LED_PIN) &&
+              (HAL_GPIO_A_LED_PIN != HAL_GPIO_C_LED_PIN) &&
+              (HAL_GPIO_B_LED_PIN != HAL_GPIO_C_LED_PIN), "Duplicate LED assignments detected");
 
 extern const AP_HAL::HAL& hal;
 
@@ -53,13 +58,8 @@ void AP_BoardLED::update(void)
     // initialising
     if (AP_Notify::flags.initialising) {
         // blink LEDs A and C at 8Hz (full cycle) during initialisation
-        if (counter2 & 1) {
-            hal.gpio->write(HAL_GPIO_A_LED_PIN, HAL_GPIO_LED_ON);
-            hal.gpio->write(HAL_GPIO_C_LED_PIN, HAL_GPIO_LED_OFF);
-        } else {
-            hal.gpio->write(HAL_GPIO_A_LED_PIN, HAL_GPIO_LED_OFF);
-            hal.gpio->write(HAL_GPIO_C_LED_PIN, HAL_GPIO_LED_ON);
-        }
+        hal.gpio->write(HAL_GPIO_A_LED_PIN, (counter2 & 1) ? HAL_GPIO_LED_ON : HAL_GPIO_LED_OFF);
+        hal.gpio->write(HAL_GPIO_C_LED_PIN, (counter2 & 1) ? HAL_GPIO_LED_OFF : HAL_GPIO_LED_ON);
         return;
 	}
 
@@ -124,19 +124,17 @@ void AP_BoardLED::update(void)
             switch(arm_counter) {
                 case 0:
                 case 1:
-                    hal.gpio->write(HAL_GPIO_A_LED_PIN, HAL_GPIO_LED_ON);
-                    break;
-                case 2:
-                    hal.gpio->write(HAL_GPIO_A_LED_PIN, HAL_GPIO_LED_OFF);
-                    break;
                 case 3:
                 case 4:
                     hal.gpio->write(HAL_GPIO_A_LED_PIN, HAL_GPIO_LED_ON);
                     break;
+
+                case 2:
                 case 5:
                 case 6:
                     hal.gpio->write(HAL_GPIO_A_LED_PIN, HAL_GPIO_LED_OFF);
                     break;
+
                 default:
                     arm_counter = -1;
                     break;
@@ -171,7 +169,5 @@ void AP_BoardLED::update(void)
             break;        
     }
 }
-#else
-bool AP_BoardLED::init(void) {return true;}
-void AP_BoardLED::update(void) {return;}
-#endif
+
+#endif  // AP_NOTIFY_GPIO_LED_3_ENABLED
